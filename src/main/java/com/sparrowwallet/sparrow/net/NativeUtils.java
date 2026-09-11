@@ -113,15 +113,19 @@ public class NativeUtils {
         }
     }
 
-    private static File createTempDirectory(String prefix) throws IOException {
-        String tempDir = System.getProperty("java.io.tmpdir");
-        File generatedDir = new File(tempDir, prefix + System.nanoTime());
-
-        if(!createOwnerOnlyDirectory(generatedDir)) {
-            throw new IOException("Failed to create temp directory " + generatedDir.getName());
+    static File createTempDirectory(String prefix) throws IOException {
+        //The directory contains code which is passed to System.load(), so its name must not be predictable. In particular,
+        //createDirectories succeeds when a guessed directory already exists and would allow another local user to replace
+        //the library between the copy and load operations. createTempDirectory atomically creates a unique directory.
+        if(OsType.getCurrent() == OsType.WINDOWS) {
+            return Files.createTempDirectory(prefix).toFile();
         }
 
-        return generatedDir;
+        try {
+            return Files.createTempDirectory(prefix, PosixFilePermissions.asFileAttribute(getDirectoryOwnerOnlyPosixFilePermissions())).toFile();
+        } catch(UnsupportedOperationException e) {
+            return Files.createTempDirectory(prefix).toFile();
+        }
     }
 
     public static boolean createOwnerOnlyDirectory(File directory) throws IOException {
